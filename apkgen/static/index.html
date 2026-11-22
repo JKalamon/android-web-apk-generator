@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>APK Generator</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #fff; --text: #1d2129; --muted: #6b7280; --border: #dfe2e7;
+    --accent: #3d5afe; --accent-text: #fff; --ok: #12805c; --err: #c62828; --warn: #a15c00;
+    --log-bg: #0f1117; --log-text: #d6dae3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111318; --card: #1a1d24; --text: #e6e8ec; --muted: #9aa1ad; --border: #2c313b;
+      --accent: #7c8cff; --accent-text: #0b0d12; --ok: #4cc38a; --err: #ff6b6b; --warn: #f0b45b;
+      --log-bg: #0b0d12;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         background: var(--bg); color: var(--text); }
+  header { padding: 18px 24px 8px; display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+  h1 { font-size: 20px; margin: 0; }
+  h2 { font-size: 15px; margin: 0 0 14px; }
+  #env { color: var(--muted); font-size: 12px; }
+  #env .bad { color: var(--err); }
+  main { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; padding: 8px 24px 32px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 8px 16px 24px; } header { padding: 16px 16px 8px; } }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 18px; }
+  .col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 520px) { .grid2 { grid-template-columns: 1fr; } }
+  label.f { display: flex; flex-direction: column; gap: 4px; font-weight: 600; font-size: 12px; color: var(--muted); }
+  input[type=text], input[type=url], input[type=number], select {
+    font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 7px 9px; width: 100%;
+  }
+  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .checks { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+  .checks label { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+  .checks small { color: var(--muted); display: block; }
+  .stack { display: flex; flex-direction: column; gap: 12px; }
+  button { font: inherit; font-weight: 600; border-radius: 6px; padding: 8px 14px; cursor: pointer;
+           border: 1px solid var(--border); background: var(--bg); color: var(--text); }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: transparent; }
+  button:disabled { opacity: .5; cursor: default; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .icon-area { display: flex; gap: 16px; align-items: center; }
+  #drop { flex: 1; border: 2px dashed var(--border); border-radius: 8px; padding: 14px; text-align: center;
+          color: var(--muted); cursor: pointer; min-height: 96px; display: grid; place-items: center; }
+  #drop.over { border-color: var(--accent); color: var(--accent); }
+  #bannerPreview { width: 100%; max-width: 320px; height: auto; aspect-ratio: 16 / 9; border-radius: 8px; display: block; }
+  #preview { width: 96px; height: 96px; flex: none; border-radius: 12px;
+             background: repeating-conic-gradient(#8882 0 25%, transparent 0 50%) 0 0 / 12px 12px; }
+  .icon-opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+  input[type=color] { width: 100%; height: 34px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); padding: 2px; }
+  input[type=range] { width: 100%; }
+  pre#log { background: var(--log-bg); color: var(--log-text); border-radius: 8px; padding: 12px; margin: 12px 0 0;
+            font: 11.5px/1.5 ui-monospace, Menlo, monospace; max-height: 260px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
+  .status { font-weight: 600; }
+  .status.ok { color: var(--ok); } .status.err { color: var(--err); }
+  .list { display: flex; flex-direction: column; gap: 6px; }
+  .dev { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
+  .dev .meta { color: var(--muted); font-size: 12px; }
+  .dev .state { margin-left: auto; font-size: 12px; font-weight: 600; }
+  .dev .state.device { color: var(--ok); } .dev .state.other { color: var(--warn); }
+  .result { font-size: 12px; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border); white-space: pre-wrap; }
+  .result.ok { border-color: var(--ok); } .result.err { border-color: var(--err); }
+  .muted { color: var(--muted); }
+  .apk { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+  .apk:last-child { border-bottom: 0; }
+  .apk span { overflow-wrap: anywhere; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>APK Generator</h1>
+  <div id="env">Checking toolchain…</div>
+</header>
+
+<main>
+  <div class="col">
+    <section class="card stack">
+      <h2>1. App</h2>
+      <label class="f">App name
+        <input type="text" id="name" placeholder="My Website" required>
+      </label>
+      <label class="f">Website URL
+        <input type="url" id="url" placeholder="https://example.com" required>
+      </label>
+      <label class="f">Package name (unique app ID — keep it the same to update an installed app)
+        <input type="text" id="package" placeholder="com.example.mywebsite" spellcheck="false">
+      </label>
+      <div class="grid2">
+        <label class="f">Version code (integer, increase for updates)
+          <input type="number" id="versionCode" min="1" value="1">
+        </label>
+        <label class="f">Version name
+          <input type="text" id="versionName" value="1.0">
+        </label>
+      </div>
+      <label class="f">Screen orientation
+        <select id="orientation">
+          <option value="unspecified">Follow device (default)</option>
+          <option value="portrait">Portrait</option>
+          <option value="landscape">Landscape</option>
+          <option value="sensorPortrait">Portrait (either way up)</option>
+          <option value="sensorLandscape">Landscape (either side)</option>
+          <option value="fullSensor">Any rotation</option>
+        </select>
+      </label>
+      <div class="checks">
+        <label><input type="checkbox" id="fullscreen"><span>Fullscreen<small>Hide status and navigation bars (swipe from an edge to show them).</small></span></label>
+        <label><input type="checkbox" id="keepScreenOn"><span>Keep screen on<small>Stop the display from sleeping while the app is open.</small></span></label>
+        <label><input type="checkbox" id="externalLinksInBrowser"><span>Open other domains in browser<small>Links to a different host open in the system browser.</small></span></label>
+        <label><input type="checkbox" id="homeLauncher"><span>Can be used as home screen<small>Kiosk use: the app can be selected as the device's launcher.</small></span></label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>2. Icon</h2>
+      <div class="icon-area">
+        <canvas id="preview" width="192" height="192"></canvas>
+        <div id="drop" tabindex="0">
+          <div>Drop an image here or click to choose<br><small>PNG / JPG / SVG / WebP. Without an image a letter icon is used.</small></div>
+        </div>
+        <input type="file" id="file" accept="image/*" hidden>
+      </div>
+      <div class="icon-opts">
+        <label class="f">Background
+          <input type="color" id="bg" value="#3d5afe">
+        </label>
+        <label class="f">Shape
+          <select id="shape">
+            <option value="square">Square</option>
+            <option value="rounded" selected>Rounded</option>
+            <option value="circle">Circle</option>
+          </select>
+        </label>
+        <label class="f">Padding <span id="padVal"></span>
+          <input type="range" id="pad" min="0" max="30" value="12">
+        </label>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button type="button" id="clearIcon">Remove image</button>
+        <label class="row muted" style="cursor:pointer"><input type="checkbox" id="transparent"> Transparent background</label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>3. Android TV banner</h2>
+      <p class="muted" style="margin:-6px 0 12px">Shown on the Android TV home screen (320×180). It's generated from the icon and name, or you can use your own image.</p>
+      <canvas id="bannerPreview" width="320" height="180"></canvas>
+      <div class="row" style="margin-top:10px">
+        <button type="button" id="pickBanner">Use custom image…</button>
+        <button type="button" id="clearBanner" hidden>Back to generated</button>
+        <input type="file" id="bannerFile" accept="image/*" hidden>
+      </div>
+    </section>
+  </div>
+
+  <div class="col">
+    <section class="card">
+      <h2>4. Build</h2>
+      <div class="row">
+        <button class="primary" id="build">Build APK</button>
+        <span id="buildStatus" class="status"></span>
+      </div>
+      <pre id="log" hidden></pre>
+    </section>
+
+    <section class="card stack">
+      <h2>5. Install on devices (adb)</h2>
+      <div class="row">
+        <button id="refresh">Refresh devices</button>
+        <span class="muted" id="devHint"></span>
+      </div>
+      <form class="row" id="connectForm">
+        <input type="text" id="connectAddr" placeholder="TV / device IP, e.g. 192.168.1.50" style="flex:1;min-width:180px" spellcheck="false">
+        <button type="submit" id="connectBtn">Connect</button>
+      </form>
+      <div class="muted" id="connectMsg" style="font-size:12px;margin-top:-6px">For Android TV, turn on Developer options → Network/ADB debugging on the TV, then connect by IP. Accept the prompt on the TV.</div>
+      <div class="list" id="devices"></div>
+      <label class="f">APK to install
+        <select id="apkSelect"></select>
+      </label>
+      <div class="checks">
+        <label><input type="checkbox" id="launch" checked><span>Launch after install</span></label>
+        <label><input type="checkbox" id="uninstallFirst"><span>Uninstall first<small>Needed if the app was signed with a different key. Clears app data.</small></span></label>
+      </div>
+      <div class="row">
+        <button class="primary" id="install" disabled>Install on selected</button>
+        <button id="buildInstall">Build + install</button>
+      </div>
+      <div class="list" id="results"></div>
+    </section>
+
+    <section class="card">
+      <h2>Built APKs</h2>
+      <div id="apks" class="muted">None yet.</div>
+    </section>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const FIELDS = ["name", "url", "package", "versionCode", "versionName", "orientation",
+                "fullscreen", "keepScreenOn", "externalLinksInBrowser", "homeLauncher",
+                "bg", "shape", "pad", "transparent", "launch", "uninstallFirst"];
+const SIZES = { mdpi: 48, hdpi: 72, xhdpi: 96, xxhdpi: 144, xxxhdpi: 192 };
+let iconImg = null, iconSrc = null, bannerImg = null, bannerSrc = null, packageTouched = false;
+
+// ---------- persistence ----------
+function save() {
+  const s = {};
+  for (const f of FIELDS) { const el = $(f); s[f] = el.type === "checkbox" ? el.checked : el.value; }
+  s.packageTouched = packageTouched;
+  try { localStorage.setItem("apkgen", JSON.stringify(s)); } catch {}
+  try { iconSrc ? localStorage.setItem("apkgen-icon", iconSrc) : localStorage.removeItem("apkgen-icon"); } catch {}
+  try { bannerSrc ? localStorage.setItem("apkgen-banner", bannerSrc) : localStorage.removeItem("apkgen-banner"); } catch {}
+}
+function load() {
+  let s = {};
+  try { s = JSON.parse(localStorage.getItem("apkgen") || "{}"); } catch {}
+  for (const f of FIELDS) {
+    if (!(f in s)) continue;
+    const el = $(f);
+    el.type === "checkbox" ? (el.checked = s[f]) : (el.value = s[f]);
+  }
+  packageTouched = !!s.packageTouched;
+  try { const src = localStorage.getItem("apkgen-icon"); if (src) setIcon(src); } catch {}
+  try { const src = localStorage.getItem("apkgen-banner"); if (src) setBanner(src); } catch {}
+}
+
+// ---------- package suggestion ----------
+function suggestPackage() {
+  if (packageTouched) return;
+  let host = "";
+  try { host = new URL($("url").value).hostname; } catch { return; }
+  const parts = host.replace(/^www\./, "").split(".").reverse()
+    .map(p => p.toLowerCase().replace(/[^a-z0-9_]/g, "_").replace(/^(\d)/, "_$1")).filter(Boolean);
+  if (parts.length === 1) parts.unshift("app");
+  $("package").value = parts.join(".");
+}
+$("url").addEventListener("input", suggestPackage);
+$("package").addEventListener("input", () => { packageTouched = $("package").value.trim() !== ""; });
+
+// ---------- icon ----------
+function drawIcon(canvas, size) {
+  const ctx = canvas.getContext("2d");
+  canvas.width = canvas.height = size;
+  ctx.clearRect(0, 0, size, size);
+  const shape = $("shape").value;
+  ctx.save();
+  ctx.beginPath();
+  if (shape === "circle") ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+  else if (shape === "rounded") ctx.roundRect(0, 0, size, size, size * 0.2);
+  else ctx.rect(0, 0, size, size);
+  ctx.clip();
+  if (!$("transparent").checked) { ctx.fillStyle = $("bg").value; ctx.fillRect(0, 0, size, size); }
+  const pad = size * (+$("pad").value / 100);
+  const box = size - pad * 2;
+  if (iconImg) {
+    const w = iconImg.naturalWidth || iconImg.width || box, h = iconImg.naturalHeight || iconImg.height || box;
+    const scale = Math.min(box / w, box / h);
+    const dw = w * scale, dh = h * scale;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(iconImg, (size - dw) / 2, (size - dh) / 2, dw, dh);
+  } else {
+    const letter = ($("name").value.trim()[0] || "A").toUpperCase();
+    ctx.fillStyle = contrastColor($("bg").value);
+    ctx.font = `600 ${box * 0.62}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(letter, size / 2, size / 2 + size * 0.03);
+  }
+  ctx.restore();
+}
+function contrastColor(hex) {
+  const n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+  return (0.299 * r + 0.587 * g + 0.114 * b) > 160 ? "#1d2129" : "#ffffff";
+}
+function drawBanner(canvas) {
+  const W = 320, H = 180, ctx = canvas.getContext("2d");
+  canvas.width = W; canvas.height = H;
+  ctx.clearRect(0, 0, W, H);
+  if (bannerImg) { // custom image: cover-fit
+    const w = bannerImg.naturalWidth || W, h = bannerImg.naturalHeight || H;
+    const s = Math.max(W / w, H / h);
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(bannerImg, (W - w * s) / 2, (H - h * s) / 2, w * s, h * s);
+    return;
+  }
+  const bg = $("bg").value;
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H); // banners must be opaque
+  const icon = document.createElement("canvas");
+  drawIcon(icon, 112);
+  ctx.drawImage(icon, 24, (H - 112) / 2);
+  const name = $("name").value.trim() || "App";
+  ctx.fillStyle = contrastColor(bg);
+  ctx.textAlign = "left"; ctx.textBaseline = "middle";
+  const maxW = W - 24 - 112 - 20 - 16;
+  // Wrap into at most 2 lines, shrinking the font until it fits.
+  for (let size = 30; size >= 14; size -= 2) {
+    ctx.font = `600 ${size}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+    const lines = wrap(ctx, name, maxW);
+    if (lines.length <= 2 && lines.every(l => ctx.measureText(l).width <= maxW) || size === 14) {
+      const lh = size * 1.2, top = H / 2 - (lines.length - 1) * lh / 2;
+      lines.slice(0, 2).forEach((l, i) => ctx.fillText(l, 24 + 112 + 20, top + i * lh, maxW));
+      break;
+    }
+  }
+}
+function wrap(ctx, text, maxW) {
+  const words = text.split(/\s+/), lines = [];
+  let cur = "";
+  for (const w of words) {
+    const t = cur ? cur + " " + w : w;
+    if (ctx.measureText(t).width <= maxW || !cur) cur = t; else { lines.push(cur); cur = w; }
+  }
+  if (cur) lines.push(cur);
+  return lines;
+}
+function renderPreview() {
+  drawIcon($("preview"), 192); drawBanner($("bannerPreview"));
+  $("padVal").textContent = $("pad").value + "%";
+  $("clearBanner").hidden = !bannerImg;
+}
+function setBanner(src) {
+  const img = new Image();
+  img.onload = () => { bannerImg = img; bannerSrc = src; renderPreview(); save(); };
+  img.src = src;
+}
+$("pickBanner").addEventListener("click", () => $("bannerFile").click());
+$("bannerFile").addEventListener("change", e => {
+  const f = e.target.files[0];
+  if (!f || !f.type.startsWith("image/")) return;
+  const r = new FileReader(); r.onload = () => setBanner(r.result); r.readAsDataURL(f);
+});
+$("clearBanner").addEventListener("click", () => { bannerImg = null; bannerSrc = null; $("bannerFile").value = ""; renderPreview(); save(); });
+function setIcon(src) {
+  const img = new Image();
+  img.onload = () => { iconImg = img; iconSrc = src; renderPreview(); save(); };
+  img.onerror = () => alert("Could not load that image.");
+  img.src = src;
+}
+function readFile(file) {
+  if (!file || !file.type.startsWith("image/")) return;
+  const r = new FileReader();
+  r.onload = () => setIcon(r.result);
+  r.readAsDataURL(file);
+}
+const drop = $("drop");
+drop.addEventListener("click", () => $("file").click());
+drop.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") $("file").click(); });
+$("file").addEventListener("change", e => readFile(e.target.files[0]));
+drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); readFile(e.dataTransfer.files[0]); });
+$("clearIcon").addEventListener("click", () => { iconImg = null; iconSrc = null; $("file").value = ""; renderPreview(); save(); });
+for (const id of ["bg", "shape", "pad", "transparent", "name"]) $(id).addEventListener("input", renderPreview);
+function iconPayload() {
+  const out = {}, c = document.createElement("canvas");
+  for (const [d, px] of Object.entries(SIZES)) { drawIcon(c, px); out[d] = c.toDataURL("image/png"); }
+  return out;
+}
+
+// ---------- API ----------
+async function api(path, body) {
+  const res = await fetch(path, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {});
+  const data = await res.json().catch(() => ({ error: res.statusText }));
+  if (!res.ok && !("ok" in data)) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+async function loadEnv() {
+  try {
+    const e = await api("/api/env");
+    const parts = [];
+    parts.push(e.build_tools ? `build-tools ${e.build_tools}` : `<span class="bad">no build-tools</span>`);
+    parts.push(e.platform ? e.platform : `<span class="bad">no platform</span>`);
+    parts.push(e.java_home ? "JDK ✓" : `<span class="bad">no JDK 17+</span>`);
+    parts.push(e.adb ? "adb ✓" : `<span class="bad">no adb</span>`);
+    $("env").innerHTML = parts.join(" · ") + (e.problems.length ? `<div class="bad">${e.problems.map(esc).join("<br>")}</div>` : "");
+    $("build").disabled = $("buildInstall").disabled = !e.can_build;
+  } catch (err) { $("env").innerHTML = `<span class="bad">Server not reachable: ${esc(err.message)}</span>`; }
+}
+
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+async function loadApks(select) {
+  const { apks } = await api("/api/apks");
+  const sel = $("apkSelect"), prev = select || sel.value;
+  sel.innerHTML = apks.length ? apks.map(a => `<option value="${esc(a.name)}">${esc(a.name)}</option>`).join("") : `<option value="">— build an APK first —</option>`;
+  if (prev && apks.some(a => a.name === prev)) sel.value = prev;
+  $("apks").innerHTML = apks.length ? apks.map(a =>
+    `<div class="apk"><span>${esc(a.name)} <span class="muted">· ${(a.size / 1024).toFixed(0)} KB · ${new Date(a.mtime * 1000).toLocaleString()}</span></span>
+     <a href="/download/${encodeURIComponent(a.name)}">Download</a></div>`).join("") : "None yet.";
+  updateInstallBtn();
+}
+
+async function doBuild() {
+  save();
+  const btn = $("build"), status = $("buildStatus"), log = $("log");
+  btn.disabled = $("buildInstall").disabled = true;
+  status.className = "status"; status.textContent = "Building…"; log.hidden = true;
+  try {
+    const cfg = {};
+    for (const f of ["name", "url", "package", "versionName", "orientation"]) cfg[f] = $(f).value.trim();
+    cfg.versionCode = parseInt($("versionCode").value, 10) || 1;
+    for (const f of ["fullscreen", "keepScreenOn", "externalLinksInBrowser", "homeLauncher"]) cfg[f] = $(f).checked;
+    cfg.icons = iconPayload();
+    const bc = document.createElement("canvas"); drawBanner(bc);
+    cfg.banner = bc.toDataURL("image/png");
+    const r = await api("/api/build", cfg);
+    log.textContent = r.log || ""; log.hidden = !r.log;
+    if (r.ok) {
+      status.className = "status ok";
+      status.innerHTML = `Built <a href="/download/${encodeURIComponent(r.apk)}">${esc(r.apk)}</a> (${(r.size / 1024).toFixed(0)} KB)`;
+      await loadApks(r.apk);
+      return r.apk;
+    }
+    status.className = "status err"; status.textContent = r.error;
+    if (!r.log) log.hidden = true;
+  } catch (err) {
+    status.className = "status err"; status.textContent = err.message;
+  } finally {
+    btn.disabled = $("buildInstall").disabled = false;
+  }
+  return null;
+}
+
+let devices = [];
+async function loadDevices() {
+  $("devHint").textContent = "Scanning…";
+  try {
+    const r = await api("/api/devices");
+    const checked = new Set([...document.querySelectorAll(".dev input:checked")].map(i => i.value));
+    const first = devices.length === 0;
+    devices = r.devices;
+    $("devHint").textContent = !r.adb ? "adb not found" : devices.length ? "" : "No devices. Connect via USB (with USB debugging on) or `adb connect <ip>`.";
+    $("devices").innerHTML = devices.map(d => {
+      const usable = d.state === "device";
+      const on = usable && (first || checked.has(d.serial));
+      const why = d.state === "unauthorized" ? " — accept the debugging prompt on the device" : "";
+      return `<label class="dev"><input type="checkbox" value="${esc(d.serial)}" ${on ? "checked" : ""} ${usable ? "" : "disabled"}>
+        <span><b>${esc(d.label)}</b><br><span class="meta">${esc(d.serial)}${esc(why)}</span></span>
+        <span class="state ${usable ? "device" : "other"}">${esc(d.state)}</span></label>`;
+    }).join("");
+    document.querySelectorAll(".dev input").forEach(i => i.addEventListener("change", updateInstallBtn));
+  } catch (err) { $("devHint").textContent = err.message; }
+  updateInstallBtn();
+}
+function selectedSerials() { return [...document.querySelectorAll(".dev input:checked")].map(i => i.value); }
+function updateInstallBtn() { $("install").disabled = !selectedSerials().length || !$("apkSelect").value; }
+
+async function doInstall(apk) {
+  save();
+  const serials = selectedSerials();
+  apk = apk || $("apkSelect").value;
+  if (!serials.length || !apk) return;
+  $("install").disabled = true;
+  $("results").innerHTML = `<div class="result">Installing ${esc(apk)} on ${serials.length} device(s)…</div>`;
+  try {
+    const r = await api("/api/install", { apk, serials, launch: $("launch").checked, uninstallFirst: $("uninstallFirst").checked });
+    if (r.error) throw new Error(r.error);
+    $("results").innerHTML = r.results.map(x => {
+      const d = devices.find(d => d.serial === x.serial);
+      return `<div class="result ${x.ok ? "ok" : "err"}"><b>${x.ok ? "✓" : "✗"} ${esc(d ? d.label : x.serial)}</b>${x.hint ? "\n" + esc(x.hint) : ""}\n<span class="muted">${esc(x.log)}</span></div>`;
+    }).join("");
+  } catch (err) {
+    $("results").innerHTML = `<div class="result err">${esc(err.message)}</div>`;
+  } finally { updateInstallBtn(); }
+}
+
+$("build").addEventListener("click", doBuild);
+$("install").addEventListener("click", () => doInstall());
+$("buildInstall").addEventListener("click", async () => {
+  if (!selectedSerials().length) { $("results").innerHTML = `<div class="result err">Select at least one device first.</div>`; return; }
+  const apk = await doBuild();
+  if (apk) await doInstall(apk);
+});
+$("refresh").addEventListener("click", loadDevices);
+$("connectForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const address = $("connectAddr").value.trim();
+  if (!address) return;
+  $("connectBtn").disabled = true; $("connectMsg").textContent = `Connecting to ${address}…`;
+  try {
+    const r = await api("/api/connect", { address });
+    $("connectMsg").innerHTML = `<span class="status ${r.ok ? "ok" : "err"}">${esc(r.output)}</span>` +
+      (r.ok ? " — if the device shows as unauthorized, accept the prompt on the TV." : "");
+    try { localStorage.setItem("apkgen-connect", address); } catch {}
+  } catch (err) { $("connectMsg").textContent = err.message; }
+  $("connectBtn").disabled = false;
+  loadDevices();
+});
+try { $("connectAddr").value = localStorage.getItem("apkgen-connect") || ""; } catch {}
+$("apkSelect").addEventListener("change", updateInstallBtn);
+document.addEventListener("change", save);
+
+load();
+renderPreview();
+loadEnv();
+loadApks();
+loadDevices();
+setInterval(() => { if (!document.hidden) loadDevices(); }, 5000);
+</script>
+</body>
+</html>
